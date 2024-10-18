@@ -15,14 +15,35 @@ const App = () => {
     fetchEmails(currentPage);
   }, [currentPage]);
 
+  useEffect(() => {
+    // Load persisted email states when the component mounts
+    const savedEmailStates = JSON.parse(localStorage.getItem('emailStates')) || {};
+    setEmails(prevEmails => 
+      prevEmails.map(email => ({
+        ...email,
+        read: savedEmailStates[email.id]?.read || false,
+        favorite: savedEmailStates[email.id]?.favorite || false
+      }))
+    );
+  }, []);
+
+  const saveEmailStates = (updatedEmails) => {
+    const emailStates = updatedEmails.reduce((acc, email) => {
+      acc[email.id] = { read: email.read, favorite: email.favorite };
+      return acc;
+    }, {});
+    localStorage.setItem('emailStates', JSON.stringify(emailStates));
+  };
+
   const fetchEmails = async (page) => {
     try {
       const response = await fetch(`https://flipkart-email-mock.vercel.app/?page=${page}`);
       const data = await response.json();
+      const savedEmailStates = JSON.parse(localStorage.getItem('emailStates')) || {};
       const initializedEmails = data.list.map(email => ({
         ...email,
-        read: false,
-        favorite: false
+        read: savedEmailStates[email.id]?.read || false,
+        favorite: savedEmailStates[email.id]?.favorite || false
       }));
       setEmails(prevEmails => {
         const newEmails = [...prevEmails, ...initializedEmails];
@@ -41,20 +62,24 @@ const App = () => {
       const data = await response.json();
       const updatedEmail = { ...email, body: data.body, read: true };
       setSelectedEmail(updatedEmail);
-      setEmails(prevEmails =>
-        prevEmails.map(e => e.id === email.id ? updatedEmail : e)
-      );
+      setEmails(prevEmails => {
+        const updatedEmails = prevEmails.map(e => e.id === email.id ? updatedEmail : e);
+        saveEmailStates(updatedEmails);
+        return updatedEmails;
+      });
     } catch (error) {
       console.error('Error fetching email body:', error);
     }
   };
 
   const handleMarkFavorite = (emailId) => {
-    setEmails(prevEmails =>
-      prevEmails.map(email =>
+    setEmails(prevEmails => {
+      const updatedEmails = prevEmails.map(email =>
         email.id === emailId ? { ...email, favorite: !email.favorite } : email
-      )
-    );
+      );
+      saveEmailStates(updatedEmails);
+      return updatedEmails;
+    });
     if (selectedEmail && selectedEmail.id === emailId) {
       setSelectedEmail(prevSelected => ({
         ...prevSelected,
